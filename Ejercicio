@@ -1,0 +1,253 @@
+#librerias
+library(TSA)
+library(PolynomF)
+library(forecast)
+
+#datos  
+gas = scan('http://verso.mat.uam.es/~joser.berrendero/datos/gas6677.dat')
+View(gas)
+plot(gas)
+#serie
+gas_compl<-ts(gas, start=c(1966,1), frequency=12)
+gas= ts(gas[-c(131:140)], start=c(1966,1), frequency=12)
+View(gas)
+#Grafico original de la serie
+plot( gas,col="2", ann=FALSE)
+points(y=gas,x=time(gas),pch=as.vector(season(gas)),col="4")
+title(main="Consumo de gasolina en España", col.main="Black", font.main=2)
+title(xlab="Meses", col.lab=rgb(1,0.4,1))
+title(ylab="Consumo", col.lab=rgb(1,0.4,1))
+#con ggplot2
+
+#funciones de autocorrelacion
+par("mar")
+par(mar=c(1,1,1,1))
+opcion = par(mfrow=c(2,1))
+acf( gas,lag.max =30)
+pacf(gas,lag.max =30)
+#Decaimiento lento de la funcion de autocorrelacion. Indicativo de que hay que diferenciar
+#logarito de la serie
+loggas<-log(gas)
+loggas_compl<-log(gas_compl)
+View(loggas)
+
+#diferenciar la serie
+s00=sd(loggas)
+s10=sd(diff(loggas,lag=1,differences=1))
+s01=sd(diff(loggas,lag=12,differences=1))
+dloggas<-diff(loggas,lag=1,differences=1)
+s11=sd(diff(dloggas,lag=12,differences=1))
+s21=sd(diff(dloggas,lag=12,differences=2))
+s20=sd(diff(loggas,lag=1,differences=2))
+s00
+s10
+s01
+s11
+s21 
+s20
+#metodo indirecto
+dtasa<-diff(loggas,lag=12,differences=1)
+plot(dtasa,ylab='dloggas',xlab='Year',type='o')
+acf(dtasa, lag.max=70)
+#prueba de raiz unitaria
+adf.test(dtasa)
+pp.test(dtasa)
+
+#modelo de estructura de autocorrelacion
+opcion = par(mfrow=c(2,1))
+acf(dtasa,lag.max=50)
+pacf(dtasa,lag.max=50)
+
+#modelos
+m1=arima(loggas,order=c(2,0,0),seasonal=list(order=c(1,1,0),period=12))
+m2=arima(loggas,order = c(2,0,0),seasonal = list(order=c(0,1,1),period=12))
+m3=arima(loggas,order = c(2,0,0),seasonal = list(order=c(0,1,2),period=12))
+confint(m1)
+confint(m2)
+confint(m3)
+?confint
+library(forecast)
+modelo<-auto.arima(loggas)
+modelo
+?auto.arima
+##Verificacion supuestos
+#modelo1
+####Residuos
+###
+t.test(m1$residuals)
+a=sd(rstandard(m1))
+plot(m1$residuals)
+abline(h=-3*a)
+abline(h=+3*a)
+acf(m1$residuals) # para ver si hay uno significativo, no hay 
+Box.test(residuals(m1),lag=10,type="Ljung" ) #correlacion entre los residuales si el p valor es grande no hay correlacion 
+Box.test(residuals(m1),lag=20,type="Ljung" )
+tsdiag(m1,gof.lag=10)
+qqnorm(rstandard(m1)) #supuesto de normalidad
+qqline(rstandard(m1))
+shapiro.test(rstandard(m1))
+hist(rstandard(m1))
+#########
+
+###
+t.test(m2$residuals)
+a=sd(rstandard(m2))
+plot(m2$residuals)
+abline(h=-3*a)
+abline(h=+3*a)
+acf(m2$residuals)
+Box.test(residuals(m2),lag=10,type="Ljung" )
+Box.test(residuals(m2),lag=20,type="Ljung" )
+tsdiag(m2,gof.lag=20)
+qqnorm(rstandard(m2))
+qqline(rstandard(m2))
+shapiro.test(rstandard(m2))
+hist(rstandard(m2))
+
+
+t.test(m3$residuals)
+a=sd(rstandard(m3))
+plot(m3$residuals)
+abline(h=-3*a)
+abline(h=+3*a)
+acf(m3$residuals)
+Box.test(residuals(m3),lag=10,type="Ljung" )
+Box.test(residuals(m3),lag=20,type="Ljung" )
+tsdiag(m3,gof.lag=20)
+qqnorm(rstandard(m3))
+qqline(rstandard(m3))
+shapiro.test(rstandard(m3))
+hist(rstandard(m3))
+
+
+#####
+#los tres modelos pasan todos los supuestos menos normalidad
+
+#Criterios de Informacion
+#modelo 1
+m1$aic
+k=length(m1$coef)
+n=length(m1$residuals)
+# AIC                         Returned Value
+log(m1$sigma2) + (n+2*k)/n   
+# AICc
+log(m1$sigma2) + (n+k)/(n-k-2) 
+# BIC
+log(m1$sigma2) + k*log(n)/n  
+
+#modelo 2
+m2$aic
+k=length(m2$coef)
+n=length(m2$residuals)
+# AIC                         Returned Value
+log(m2$sigma2) + (n+2*k)/n   
+# AICc
+log(m2$sigma2) + (n+k)/(n-k-2) 
+# BIC
+log(m2$sigma2) + k*log(n)/n  
+
+#modelo 3
+m3$aic
+k=length(m3$coef)
+n=length(m3$residuals)
+
+# AIC                         Returned Value
+log(m3$sigma2) + (n+2*k)/n   
+# AICc
+log(m3$sigma2) + (n+k)/(n-k-2) 
+# BIC
+log(m3$sigma2) + k*log(n)/n  
+
+#### invertivilidad
+library(PolynomF)
+coef(m2)
+x <- polynom() # polynomial 'x'
+p <-  1 +0.7447121*x
+p
+solve(p)
+Mod(  -1.342801 )
+Mod( -0.7447121 -1.342801i)
+#parte ma modelo 2
+
+coef(m3)
+x <- polynom() # polynomial 'x'
+p <-  1 +0.8339162 *x
+p
+solve(p)
+Mod (0.8339162 -1.199161i )
+
+x <- polynom() # polynomial 'x'
+p <-  1 -0.1620034 *x
+p
+solve(p)
+Mod(0.1620034 +6.17271i)
+
+#mod modelo 3
+###Etapa de pronosticos:
+View(loggas)
+#modelo 1
+prod.pr = predict(m1, n.ahead=12)
+prod.pr
+U = prod.pr$pred + 2*prod.pr$se
+L = prod.pr$pred - 2*prod.pr$se
+ts.plot(loggas,prod.pr$pred, col=1:2, type="o", ylim=c(4.5,6.5), xlim=c(1966,1977))
+lines(U, col="blue", lty="dashed")
+lines(L, col="blue", lty="dashed")
+abline(v=1976,lty="dotted")
+logpronosticado<-ts(prod.pr$pred,start=c(1976,1),frequency=12)
+Pronoorig<-exp(logpronosticado) #Le aplico antilogaritmo a los pronosticos.
+Pronoorig
+ts.plot(gas,Pronoorig, col=1:3, type="o", xlim=c(1966,1977))
+
+abline(v=1976,lty="dotted")
+
+##modelo 2
+prod.pr = predict(m2, n.ahead=12)
+prod.pr
+U = prod.pr$pred + 2*prod.pr$se
+L = prod.pr$pred - 2*prod.pr$se
+ts.plot(loggas,prod.pr$pred, col=1:2, type="o", ylim=c(4.5,6.5), xlim=c(1966,1977))
+lines(U, col="blue", lty="dashed")
+lines(L, col="blue", lty="dashed")
+abline(v=1976,lty="dotted")
+logpronosticado<-ts(prod.pr$pred,start=c(1976,1),frequency=12)
+Pronoorig<-exp(logpronosticado) #Le aplico antilogaritmo a los pronosticos.
+Pronoorig
+ts.plot(gas,Pronoorig, col=1:3, type="o", xlim=c(1966,1977))
+abline(v=1976,lty="dotted")
+
+
+#modelo 3
+prod.pr = predict(m3, n.ahead=12)
+prod.pr
+U = prod.pr$pred + 2*prod.pr$se
+L = prod.pr$pred - 2*prod.pr$se
+ts.plot(loggas,prod.pr$pred, col=1:2, type="o", ylim=c(4.5,6.5), xlim=c(1966,1977))
+lines(U, col="blue", lty="dashed")
+lines(L, col="blue", lty="dashed")
+abline(v=1976,lty="dotted")
+logpronosticado<-ts(prod.pr$pred,start=c(1976,1),frequency=12)
+Pronoorig<-exp(logpronosticado) #Le aplico antilogaritmo a los pronosticos.
+Pronoorig
+ts.plot(gas,Pronoorig, col=1:3, type="o", xlim=c(1966,1977))
+abline(v=1976,lty="dotted")
+
+#falta carretica y mirar serie pasajeros
+
+
+
+View(gas)
+pre.m1<-predict(m1, n.ahead = 12)
+pre.m2<-predict(m2, n.ahead = 12)
+pre.m3<-predict(m3, n.ahead = 12)
+val_reales<-loggas_compl[129:140]
+
+
+ecm<-data.frame(modelo1=sum(((val_reales)^2)-pre.m1$pred)/12,
+                modelo2=sum(((val_reales)^2)-pre.m2$pred)/12,
+                modelo3=sum(((val_reales)^2)-pre.m3$pred)/12)
+rownames(ecm)<-"ECM"
+View(ecm)
+ecm
+save(ecm,"ecm.Rmd")
+save(ecm, file = "ecm.RData")
